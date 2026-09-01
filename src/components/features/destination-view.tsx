@@ -78,7 +78,7 @@ export function DestinationView({ photo }: Props) {
                   isFavorite ? "Quitar de favoritos" : "Guardar en favoritos"
                 }
                 className="shadow-md backdrop-blur"
-                onClick={() => favorites.toggle(photo.id)}
+                onClick={() => favorites.toggle(photo)}
               >
                 <Heart
                   className={cn(

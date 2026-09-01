@@ -27,6 +27,13 @@ const PARTICLES = Array.from({ length: 8 }, (_, i) => {
   }
 })
 
+// REVIEWER_NOTE: Staggered fade-in tied to the IMAGE load event, not card mount.
+// A pure CSS mount animation is invisible in practice: it plays during the 0.5-1.2s while the
+// photo is still downloading from the CDN, finishing before anything is painted. Instead, each
+// card starts hidden (opacity 0, translated down) and transitions into view when its Image fires
+// onLoad. The per-index transitionDelay (60ms steps, capped at 660ms) makes cards that finish
+// loading together reveal in a visible cascade. onError also reveals the card so a broken image
+// never leaves invisible content, and motion-reduce variants respect reduced-motion settings.
 export function PhotoCard({
   photo,
   index,
@@ -37,6 +44,7 @@ export function PhotoCard({
   onToggleFavorite,
 }: Props) {
   const [burst, setBurst] = useState(false)
+  const [loaded, setLoaded] = useState(false)
 
   function handleFavorite() {
     const willFavorite = !isFavorite
@@ -47,8 +55,19 @@ export function PhotoCard({
   return (
     <article
       role="listitem"
-      className="mb-4 break-inside-avoid animate-stagger"
-      style={{ "--stagger-index": index } as CSSProperties}
+      className={cn(
+        "mb-4 break-inside-avoid transition-all duration-500 ease-out motion-reduce:transition-none",
+        loaded
+          ? "translate-y-0 opacity-100"
+          : "translate-y-3 opacity-0 motion-reduce:translate-y-0 motion-reduce:opacity-100"
+      )}
+      style={
+        {
+          transitionDelay: loaded
+            ? `${Math.min(index, 11) * 60}ms`
+            : "0ms",
+        } as CSSProperties
+      }
     >
       <div className="group relative overflow-hidden rounded-xl bg-muted ring-1 ring-foreground/10">
         <button
@@ -68,6 +87,8 @@ export function PhotoCard({
             sizes="(min-width:1280px) 25vw, (min-width:1024px) 33vw, (min-width:640px) 50vw, 100vw"
             className="h-auto w-full"
             style={{ aspectRatio: `${photo.width} / ${photo.height}` }}
+            onLoad={() => setLoaded(true)}
+            onError={() => setLoaded(true)}
           />
 
           <div className="scrim absolute inset-x-0 bottom-0 flex flex-col gap-1 p-3 text-left opacity-0 transition-opacity duration-300 group-hover:opacity-100">

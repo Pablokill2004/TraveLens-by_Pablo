@@ -8,7 +8,7 @@ interface Props {
   photos: UnsplashPhoto[]
   favorites: Set<string>
   onOpen: (photo: UnsplashPhoto) => void
-  onToggleFavorite: (id: string) => void
+  onToggleFavorite: (photo: UnsplashPhoto) => void
 }
 
 export function MasonryGrid({ photos, favorites, onOpen, onToggleFavorite }: Props) {
@@ -71,7 +71,7 @@ export function MasonryGrid({ photos, favorites, onOpen, onToggleFavorite }: Pro
           isFavorite={favorites.has(photo.id)}
           onActivate={setActiveIndex}
           onOpen={() => onOpen(photo)}
-          onToggleFavorite={() => onToggleFavorite(photo.id)}
+          onToggleFavorite={() => onToggleFavorite(photo)}
         />
       ))}
     </div>

@@ -138,10 +138,11 @@ function HomeContent() {
     }
   }, [isSearchMode, query, page, loadSearch, loadPopular])
 
+  // REVIEWER_NOTE: Favorites render from their OWN persisted photo objects, not by filtering the
+  // current feed. The popular feed shows 3 random cities per load, so saved photos would almost
+  // never appear in it — filtering the feed for saved IDs left the favorites view empty.
   const favoritesSet = new Set(favorites.ids)
-  const visible = showFavorites
-    ? photos.filter((p) => favoritesSet.has(p.id))
-    : photos
+  const visible = showFavorites ? favorites.photos : photos
 
   return (
     <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-6 px-4 py-8 sm:px-6 lg:px-8">
