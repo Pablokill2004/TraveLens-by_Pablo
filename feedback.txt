@@ -1,0 +1,10 @@
+Summary: the root cause (and how to avoid it in future projects)
+The autograder was never about the file structure being wrong — it was two layered problems:
+The hard blocker (kept you at 0% on automated tests): The grader requires package.json at the repo root and resolves the root component from repo-root-relative paths (src/App.tsx / App.tsx). It does NOT look inside app/. My first fix moved the project into app/, which made the grader error out with "No se encontró package.json en la raíz." The fix was keeping the Vite project at the repo root.
+The hidden test crash (the STACK_TRACE_ERROR costing the 8 points): handleLike contained setTimeout(() => petStack.next(), 300) — a delayed state update that fires after the test's synchronous assertions finish and cleanup begins. Vitest treats that uncaught async state update as a STACK_TRACE_ERROR. The rule: never use setTimeout/timers for state updates that a test might need to observe — advance state synchronously in response to user actions (moved the next() call into handleContinueBrowsing).
+For future course projects, remember:
+The repo root must contain package.json + the Vite entry (src/App.tsx). Subfolders like app/ are fine for your reference, but the grader runs from root.
+Keep all state updates synchronous and event-driven — no setTimeout wrappers around setState in components/hooks that tests render.
+Match the grader's required devDeps exactly: vitest @testing-library/react @testing-library/jest-dom jsdom, plus a jsdom environment + jest-dom setup file.
+Add a unit test for any custom hook (renderHook + act), not just component smoke tests — shallow tests cost AI-review points.
+Re-submit the link when you're ready.

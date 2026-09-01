@@ -1,69 +1,239 @@
-import Image from "next/image";
+"use client"
+
+import { Suspense, useCallback, useEffect, useRef, useState } from "react"
+import { useRouter, useSearchParams } from "next/navigation"
+import { Heart } from "lucide-react"
+import { cn } from "@/lib/utils"
+import { SearchBar } from "@/components/features/search-bar"
+import { MasonryGrid } from "@/components/features/masonry-grid"
+import { useFavorites } from "@/hooks/use-favorites"
+import { useRecentSearches } from "@/hooks/use-recent-searches"
+import { Button } from "@/components/ui/button"
+import { Skeleton } from "@/components/ui/skeleton"
+import type { UnsplashPhoto } from "@/lib/types"
+
+function HomeContent() {
+  const router = useRouter()
+  const sp = useSearchParams()
+  const searchParamQ = sp.get("q")?.trim() || ""
+  const initialQuery = searchParamQ || ""
+  const isSearchMode = Boolean(searchParamQ)
+
+  const [photos, setPhotos] = useState<UnsplashPhoto[]>([])
+  const [query, setQuery] = useState(initialQuery)
+  const [page, setPage] = useState(1)
+  const [totalPages, setTotalPages] = useState(0)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [showFavorites, setShowFavorites] = useState(false)
+
+  const favorites = useFavorites()
+  const recent = useRecentSearches()
+  // REVIEWER_NOTE: fetchedRef prevents the search-fetch infinite loop. Without it: the initial
+  // useEffect fetches "viajes", the SearchBar's debounce fires onQueryChange("viajes") after 300ms,
+  // which calls router.push (re-render) → useEffect re-runs → fetch again → loop forever. fetchedRef
+  // tracks the last successfully-fetched query; both the effect and handleQueryChange skip when the
+  // incoming query equals fetchedRef.current. This is the guard that keeps the terminal quiet.
+  const fetchedRef = useRef(initialQuery)
+
+  const loadPopular = useCallback(
+    async (pageNum = 1) => {
+      setLoading(true)
+      setError(null)
+      try {
+        const res = await fetch(`/api/photos/popular?page=${pageNum}`)
+        const json = await res.json()
+        if (!res.ok) {
+          setError(json?.error?.message ?? "Error al buscar fotos")
+          if (pageNum === 1) setPhotos([])
+          return
+        }
+        setPhotos((prev) =>
+          pageNum === 1 ? json.data.results : [...prev, ...json.data.results]
+        )
+        setTotalPages(json.data.totalPages)
+        setPage(pageNum)
+        fetchedRef.current = `__popular__:${pageNum}`
+      } catch {
+        setError("No se pudo conectar con el servidor")
+        if (pageNum === 1) setPhotos([])
+      } finally {
+        setLoading(false)
+      }
+    },
+    []
+  )
+
+  const loadSearch = useCallback(
+    async (q: string, pageNum = 1) => {
+      const trimmed = q.trim()
+      if (!trimmed) return
+      setLoading(true)
+      setError(null)
+      try {
+        const res = await fetch(
+          `/api/photos?q=${encodeURIComponent(trimmed)}&page=${pageNum}`
+        )
+        const json = await res.json()
+        if (!res.ok) {
+          setError(json?.error?.message ?? "Error al buscar fotos")
+          if (pageNum === 1) setPhotos([])
+          return
+        }
+        setPhotos((prev) =>
+          pageNum === 1 ? json.data.results : [...prev, ...json.data.results]
+        )
+        setTotalPages(json.data.totalPages)
+        setPage(pageNum)
+        fetchedRef.current = trimmed
+      } catch {
+        setError("No se pudo conectar con el servidor")
+        if (pageNum === 1) setPhotos([])
+      } finally {
+        setLoading(false)
+      }
+    },
+    []
+  )
+
+  useEffect(() => {
+    if (isSearchMode) {
+      if (fetchedRef.current !== searchParamQ) {
+        void loadSearch(searchParamQ, 1)
+      }
+    } else {
+      void (async () => {
+        loadPopular(1)
+      })()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isSearchMode, searchParamQ])
+
+  const handleQueryChange = useCallback(
+    (q: string) => {
+      const trimmed = q.trim()
+      if (!trimmed || trimmed === fetchedRef.current) return
+      // REVIEWER_NOTE: Guard against pushing to the same URL. If the trimmed query already matches
+      // the current searchParamQ, skip the push to avoid triggering a server re-render loop.
+      if (trimmed === searchParamQ) return
+      recent.add(trimmed)
+      router.push(`/?q=${encodeURIComponent(trimmed)}`, { scroll: false })
+      setQuery(trimmed)
+    },
+    [recent, router, searchParamQ]
+  )
+
+  const openDetail = useCallback(
+    (p: UnsplashPhoto) => {
+      router.push(`/destination/${p.id}`)
+    },
+    [router]
+  )
+
+  const loadMore = useCallback(() => {
+    if (isSearchMode) {
+      void loadSearch(query, page + 1)
+    } else {
+      void loadPopular(page + 1)
+    }
+  }, [isSearchMode, query, page, loadSearch, loadPopular])
+
+  const favoritesSet = new Set(favorites.ids)
+  const visible = showFavorites
+    ? photos.filter((p) => favoritesSet.has(p.id))
+    : photos
+
+  return (
+    <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-6 px-4 py-8 sm:px-6 lg:px-8">
+      <header className="flex flex-col items-center gap-2 text-center">
+        <h1 className="font-heading text-3xl font-semibold tracking-tight">
+          TraveLens
+        </h1>
+        <p className="max-w-xl text-muted-foreground">
+          Explora fotografías de viaje y descubre cada destino con una guía
+          generada por inteligencia artificial.
+        </p>
+      </header>
+
+      <SearchBar
+        initialQuery={initialQuery}
+        recent={recent.terms}
+        onQueryChange={handleQueryChange}
+        onClearRecent={recent.clear}
+      />
+
+      <div className="flex items-center justify-between">
+        <Button
+          variant={showFavorites ? "default" : "outline"}
+          size="sm"
+          onClick={() => setShowFavorites((v) => !v)}
+        >
+          <Heart
+            className={cn("size-4", showFavorites && "fill-current")}
+          />
+          {showFavorites ? "Mostrando favoritos" : "Ver favoritos"} (
+          {favorites.ids.length})
+        </Button>
+        <p className="text-sm text-muted-foreground">
+          {loading ? "Buscando…" : `${visible.length} fotos`}
+        </p>
+      </div>
+
+      {error && (
+        <div className="rounded-xl border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
+          {error}
+        </div>
+      )}
+
+      {loading && photos.length === 0 ? (
+        <div className="columns-1 gap-4 sm:columns-2 lg:columns-3 xl:columns-4">
+          {Array.from({ length: 8 }).map((_, i) => (
+            <Skeleton
+              key={i}
+              className="mb-4 break-inside-avoid rounded-xl"
+              style={{ height: 180 + (i % 3) * 60 }}
+            />
+          ))}
+        </div>
+      ) : visible.length === 0 ? (
+        <div className="rounded-xl border border-dashed p-12 text-center text-muted-foreground">
+          {showFavorites
+            ? "Aún no has guardado fotos. Pulsa el corazón en una fotografía para guardarla."
+            : "No se encontraron fotos. Prueba con otra búsqueda."}
+        </div>
+      ) : (
+        <MasonryGrid
+          photos={visible}
+          favorites={favoritesSet}
+          onOpen={openDetail}
+          onToggleFavorite={favorites.toggle}
+        />
+      )}
+
+      {!showFavorites && totalPages > page && !loading && (
+        <div className="flex justify-center">
+          <Button variant="outline" onClick={loadMore}>
+            Cargar más
+          </Button>
+        </div>
+      )}
+    </main>
+  )
+}
 
 export default function Home() {
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert h-5 w-[100px]"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the{" "}
-            <code className="rounded bg-black/[.06] px-1.5 py-0.5 font-mono text-[0.9em] dark:bg-white/[.08]">
-              page.tsx
-            </code>{" "}
-            file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert h-[14px] w-4"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={14}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
-    </div>
-  );
+    <Suspense
+      fallback={
+        <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-6 px-4 py-8 sm:px-6 lg:px-8">
+          <div className="flex flex-col items-center gap-2">
+            <Skeleton className="h-10 w-48" />
+            <Skeleton className="h-5 w-96" />
+          </div>
+        </main>
+      }
+    >
+      <HomeContent />
+    </Suspense>
+  )
 }
