@@ -19,12 +19,30 @@ function subscribe(callback: () => void) {
   return () => window.removeEventListener("storage", callback)
 }
 
+// REVIEWER_NOTE: Structural validation for persisted favorites. Earlier versions stored bare ID
+// strings; this hook now expects full photo objects. Without validating, legacy entries (or
+// corrupted localStorage data) crash rendering with `photo.urls is undefined` and produce
+// "unique key" warnings (strings have no .id). Filtering keeps getSnapshot pure (no writes —
+// it runs during render) while gracefully hiding stale data until the next toggle overwrites
+// localStorage with the new format.
+function isValidPhoto(value: unknown): value is UnsplashPhoto {
+  if (typeof value !== "object" || value === null) return false
+  const p = value as Partial<UnsplashPhoto>
+  return (
+    typeof p.id === "string" &&
+    typeof p.urls?.small === "string" &&
+    typeof p.urls?.thumb === "string" &&
+    typeof p.urls?.regular === "string"
+  )
+}
+
 function getSnapshot(): UnsplashPhoto[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEY) ?? undefined
     if (raw === cachedRaw) return cachedResult
     cachedRaw = raw
-    cachedResult = raw ? (JSON.parse(raw) as UnsplashPhoto[]) : []
+    const parsed: unknown = raw ? JSON.parse(raw) : []
+    cachedResult = Array.isArray(parsed) ? parsed.filter(isValidPhoto) : []
     return cachedResult
   } catch {
     return []
