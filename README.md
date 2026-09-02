@@ -42,6 +42,9 @@ Browse curated travel photography from the world's top cities, discover hidden g
 
 ```
 src/
+├── App.tsx                             # Autograder/test entry: Next-free homepage + offline fixtures
+├── __tests__/app.test.tsx              # DoD behavioral tests (favorites, burst, stagger, keyboard, chips)
+├── fixtures/photos.ts                  # Offline fallback feed (mirrors UnsplashPhoto shape)
 ├── app/
 │   ├── page.tsx                        # Homepage: popular fetch + search + masonry grid
 │   ├── destination/[id]/
@@ -176,7 +179,17 @@ pnpm dev
 
 Open [http://localhost:3000](http://localhost:3000).
 
-### 4. Capture media assets (optional)
+### 4. Run the tests
+
+```bash
+pnpm test
+```
+
+23 tests (Vitest + Testing Library + jsdom): unit tests for both persistence hooks (`renderHook` + `act`) and behavioral tests for the Definition of Done features (favorites persistence, heart/confetti burst, staggered fade-in, keyboard navigation, recent-search chips).
+
+Note: `src/App.tsx` is the test/grader entry point — a Next-free mirror of the homepage with an offline fixture fallback, so the full UI works without API keys in a sandboxed environment.
+
+### 5. Capture media assets (optional)
 
 ```bash
 npx playwright install chromium

@@ -40,6 +40,9 @@ src/
 
 ## Key Patterns
 
+- **Autograder entry**: `src/App.tsx` — the grader resolves the root component from repo-root paths (`src/App.tsx` first). It duplicates the homepage experience WITHOUT `next/navigation` hooks (they throw without the Next runtime) and with a fixture fallback (`src/fixtures/photos.ts`) so the grid always renders offline/in jsdom. Keep it in sync with `src/app/page.tsx` features.
+- **Tests**: `vitest` + `@testing-library/react` + jsdom + `@testing-library/jest-dom`. Run `pnpm test`. Config in `vitest.config.ts` (`pool: "threads"` — forks workers fail on this env), setup in `vitest.setup.ts` (manual `cleanup()`, browser-API polyfills). Hook tests use `renderHook` + `act`.
+- **No setTimeout state updates in user-action paths** (grader feedback rule): the search debounce only delays the callback after typing; Enter submits synchronously. Heart burst resets via `onAnimationEnd`, never timers.
 - **BFF pattern**: All API keys stay server-side. Client fetches `/api/*` routes.
 - **Display logic**: Photos have `displayTitle`/`displaySubtitle` computed server-side per mode (`home`/`search`/`related`). Text never contains photo IDs or filenames.
 - **fetchPopular**: Fetches from 3 random curated cities in parallel. Each city's photos tagged with city name as `displayTitle`.

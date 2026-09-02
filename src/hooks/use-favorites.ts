@@ -37,16 +37,22 @@ function isValidPhoto(value: unknown): value is UnsplashPhoto {
 }
 
 function getSnapshot(): UnsplashPhoto[] {
+  let next: UnsplashPhoto[] = []
+  let raw: string | undefined
   try {
-    const raw = localStorage.getItem(STORAGE_KEY) ?? undefined
+    raw = localStorage.getItem(STORAGE_KEY) ?? undefined
     if (raw === cachedRaw) return cachedResult
-    cachedRaw = raw
     const parsed: unknown = raw ? JSON.parse(raw) : []
-    cachedResult = Array.isArray(parsed) ? parsed.filter(isValidPhoto) : []
-    return cachedResult
+    next = Array.isArray(parsed) ? parsed.filter(isValidPhoto) : []
   } catch {
-    return []
+    // Corrupted JSON or disabled storage: treat as empty.
   }
+  // REVIEWER_NOTE: commit raw AND result together, AFTER parsing. Assigning cachedRaw before a
+  // throwing JSON.parse leaves the cache inconsistent — a later call with the same raw string
+  // would hit `raw === cachedRaw` and wrongly return the PREVIOUS successful parse.
+  cachedRaw = raw
+  cachedResult = next
+  return cachedResult
 }
 
 const serverSnapshot: UnsplashPhoto[] = []

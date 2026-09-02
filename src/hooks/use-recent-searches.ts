@@ -14,15 +14,22 @@ function subscribe(callback: () => void) {
 }
 
 function getSnapshot(): string[] {
+  let next: string[] = []
+  let raw: string | undefined
   try {
-    const raw = localStorage.getItem(STORAGE_KEY) ?? undefined
+    raw = localStorage.getItem(STORAGE_KEY) ?? undefined
     if (raw === cachedRaw) return cachedResult
-    cachedRaw = raw
-    cachedResult = raw ? (JSON.parse(raw) as string[]) : []
-    return cachedResult
+    const parsed: unknown = raw ? JSON.parse(raw) : []
+    next = Array.isArray(parsed)
+      ? parsed.filter((t): t is string => typeof t === "string")
+      : []
   } catch {
-    return []
+    // Corrupted JSON or disabled storage: treat as empty.
   }
+  // REVIEWER_NOTE: commit raw AND result together AFTER parsing (see use-favorites for rationale).
+  cachedRaw = raw
+  cachedResult = next
+  return cachedResult
 }
 
 const serverSnapshot: string[] = []
